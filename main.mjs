@@ -14,6 +14,8 @@ const fileGlobs = [
   'vendor/**/*.scss',
 ];
 
+const stylelintRegex = /stylelint-disable (.*) \*\//;
+
 function ignoreError(errors, filePath) {
   const ruleIds = errors
     .filter(error => error.severity === 'error')
@@ -30,8 +32,8 @@ function ignoreError(errors, filePath) {
 
   const firstLine = file.split('\n')[0];
 
-  if (firstLine.includes('stylelint-disable')) {
-    const matched = firstLine.match(/stylelint-disable (.*) \*\//);
+  if (firstLine.match(stylelintRegex)) {
+    const matched = firstLine.match(stylelintRegex);
     const existing = matched[1].split(',')
       .map(item => item.trim())
       .filter(item => item.length);
@@ -44,11 +46,16 @@ function ignoreError(errors, filePath) {
   }
 }
 
-export async function ignoreAll() {
+export async function ignoreAll(directory) {
+  // this is only used for internal testing, lint-to-the-future never passes a
+  // directory
+  const cwd = directory || process.cwd();
+
   const stylelint = importCwd('stylelint');
 
   const result = await stylelint.lint({
     files: fileGlobs,
+    cwd,
   });
 
   const erroredResults = result.results.filter(err => err.errored);
@@ -61,8 +68,10 @@ export async function ignoreAll() {
   });
 }
 
-export function list() {
-  const cwd = process.cwd();
+export function list(directory) {
+  // this is only used for internal testing, lint-to-the-future never passes a
+  // directory
+  const cwd = directory || process.cwd();
 
   const files = walkSync(cwd, {
     globs: fileGlobs,
@@ -73,11 +82,12 @@ export function list() {
   files.forEach((filePath) => {
     const file = readFileSync(join(cwd, filePath), 'utf8');
     const firstLine = file.split('\n')[0];
-    if (!firstLine.includes('stylelint-disable')) {
+
+    if (!firstLine.match(stylelintRegex)) {
       return;
     }
 
-    const matched = firstLine.match(/stylelint-disable (.*) \*\//);
+    const matched = firstLine.match(stylelintRegex);
 
     const ignoreRules = matched[1].split(',')
       .map(item => item.trim())
